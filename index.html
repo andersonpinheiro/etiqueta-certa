@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#1a1a2e">
 <meta name="description" content="Gerador de etiquetas dos Correios - PWA">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>CorreioLabel — Etiquetas Inteligentes</title>
 <link rel="manifest" href="manifest.json">
@@ -1202,28 +1203,64 @@ const state = {
 };
 
 // ===== URLS =====
-const API = {
-  hom: {
-    token: 'https://apihom.correios.com.br/token/v1/autentica/cartaopostagem',
-    cep: 'https://apihom.correios.com.br/cep/v1/enderecos/',
-    prepostagem: 'https://apihom.correios.com.br/prepostagem/v1/prepostagens',
-    rotulo: 'https://apihom.correios.com.br/prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
-    rastro: 'https://apihom.correios.com.br/srorastro/v1/objetos/',
-    preco: 'https://apihom.correios.com.br/preco/v1/nacional/',
-    prazo: 'https://apihom.correios.com.br/prazo/v1/nacional/',
-  },
-  prod: {
-    token: 'https://api.correios.com.br/token/v1/autentica/cartaopostagem',
-    cep: 'https://api.correios.com.br/cep/v1/enderecos/',
-    prepostagem: 'https://api.correios.com.br/prepostagem/v1/prepostagens',
-    rotulo: 'https://api.correios.com.br/prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
-    rastro: 'https://api.correios.com.br/srorastro/v1/objetos/',
-    preco: 'https://api.correios.com.br/preco/v1/nacional/',
-    prazo: 'https://api.correios.com.br/prazo/v1/nacional/',
-  }
+// Todas as chamadas passam pelos proxies Vercel (/api/*) para resolver CORS.
+// O proxy repassa server-side para os Correios e retorna a resposta.
+const CORREIOS_BASE = {
+  hom: 'https://apihom.correios.com.br',
+  prod: 'https://api.correios.com.br',
 };
 
-function getURL(key) { return API[state.env][key]; }
+function getCorreiosBase() { return CORREIOS_BASE[state.env]; }
+
+// Monta a URL real dos Correios (usada pelo proxy como targetUrl)
+function getCorreiosURL(path) { return getCorreiosBase() + path; }
+
+// Todas as chamadas vão para /api/proxy (exceto token que tem rota própria)
+const PROXY_URL = '/api/proxy';
+const TOKEN_PROXY_URL = '/api/token';
+
+// Helper central de fetch — sempre via proxy
+async function coreFetch(correiosPath, options = {}) {
+  const { method = 'GET', body, isToken = false, authOverride } = options;
+  const targetUrl = getCorreiosURL(correiosPath);
+  const token = authOverride || state.token;
+
+  if (isToken) {
+    // Token usa rota dedicada /api/token
+    return fetch(TOKEN_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-correios-env': state.env,
+        ...(authOverride ? { 'Authorization': authOverride } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Demais APIs usam o proxy genérico
+  return fetch(PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+    },
+    body: JSON.stringify({ targetUrl, method, body }),
+  });
+}
+
+// Compat: getURL ainda usado em poucos lugares legados
+function getURL(key) {
+  const paths = {
+    cep: '/cep/v1/enderecos/',
+    prepostagem: '/prepostagem/v1/prepostagens',
+    rotulo: '/prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
+    rastro: '/srorastro/v1/objetos/',
+    preco: '/preco/v1/nacional/',
+    prazo: '/prazo/v1/nacional/',
+  };
+  return paths[key] || '/';
+}
 
 // ===== NAVIGATION =====
 function navigate(panelId) {
@@ -1297,6 +1334,7 @@ function toggleEnv() {
   }
   state.token = null;
   state.tokenExpires = null;
+  localStorage.removeItem('cl_token');
   updateTokenUI(null);
   toast(isProd ? '🔴 Ambiente: Produção' : '🟡 Ambiente: Homologação', 'warning');
 }
@@ -1316,6 +1354,26 @@ function loadCredentials() {
       if (creds.env) { state.env = creds.env; }
     }
     updateCredStatus(true);
+  } catch(e) {}
+
+  // Restaurar token salvo (se ainda válido)
+  try {
+    const savedToken = localStorage.getItem('cl_token');
+    if (savedToken) {
+      const { token, expires, env } = JSON.parse(savedToken);
+      // Verificar se não expirou
+      const expDate = expires ? new Date(expires) : null;
+      const isValid = !expDate || expDate > new Date();
+      if (token && isValid && env === state.env) {
+        state.token = token;
+        state.tokenExpires = expires;
+        updateTokenUI({ token, expiraEm: expires });
+        console.log('[CorreioLabel] Token restaurado do localStorage');
+      } else if (!isValid) {
+        localStorage.removeItem('cl_token');
+        console.log('[CorreioLabel] Token expirado, removido');
+      }
+    }
   } catch(e) {}
 }
 
@@ -1337,6 +1395,7 @@ function saveCredentials() {
 
 function clearCredentials() {
   localStorage.removeItem('cl_creds');
+  localStorage.removeItem('cl_token');
   state.credentials = null;
   state.token = null;
   ['cred-user','cred-pass','cred-card','cred-contract'].forEach(id => { document.getElementById(id).value = ''; });
@@ -1367,32 +1426,45 @@ async function refreshToken() {
 
   try {
     const { user, pass, card } = state.credentials;
-    const basicAuth = btoa(user + ':' + pass);
+    const basicAuth = 'Basic ' + btoa(user + ':' + pass);
 
-    const resp = await fetch(getURL('token'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + basicAuth,
-      },
-      body: JSON.stringify({ numero: card }),
+    const resp = await coreFetch('/token/v1/autentica/cartaopostagem', {
+      isToken: true,
+      authOverride: basicAuth,
+      body: { numero: card },
     });
 
     if (!resp.ok) {
       const err = await resp.text();
-      throw new Error('Status ' + resp.status + ': ' + err.substring(0, 100));
+      throw new Error('Status ' + resp.status + ': ' + err.substring(0, 120));
     }
 
     const data = await resp.json();
-    state.token = data.token;
-    state.tokenExpires = data.expiraEm;
-    updateTokenUI(data);
-    toast('Token gerado com sucesso! Válido até ' + formatDateBR(data.expiraEm), 'success');
+    const tokenValue = data.token || data.tokenValor || null;
+    const expiresValue = data.expiraEm || data.expiresAt || null;
+
+    if (!tokenValue) throw new Error('Token não retornado. Resposta: ' + JSON.stringify(data).substring(0, 200));
+
+    state.token = tokenValue;
+    state.tokenExpires = expiresValue;
+    localStorage.setItem('cl_token', JSON.stringify({ token: tokenValue, expires: expiresValue, env: state.env }));
+
+    updateTokenUI({ token: tokenValue, expiraEm: expiresValue });
+    const expFormatted = expiresValue ? formatDateBR(expiresValue) : '~24h';
+    toast('Token gerado com sucesso! Válido até ' + expFormatted, 'success');
 
   } catch(e) {
-    toast('Erro ao gerar token: ' + e.message, 'error');
-    console.error(e);
+    if (e.message.includes('Failed to fetch') || e.name === 'TypeError') {
+      toast('Erro de conexão — verifique se está rodando via Vercel ou servidor local', 'error', 8000);
+    } else {
+      toast('Erro ao gerar token: ' + e.message, 'error', 6000);
+    }
+    console.error('[CorreioLabel] Erro token:', e);
   } finally {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Gerar Token';
+    btn.disabled = false;
+  }
+}
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Gerar Token';
     btn.disabled = false;
   }
@@ -1403,21 +1475,33 @@ function updateTokenUI(data) {
   const footer = document.getElementById('token-status-footer');
   const statEl = document.getElementById('stat-token');
   const statSub = document.getElementById('stat-token-sub');
+  const tokenBtn = document.getElementById('token-btn');
 
   if (data && data.token) {
     if (card) card.style.display = 'block';
     const preview = document.getElementById('token-preview');
-    if (preview) preview.textContent = data.token.substring(0, 40) + '...';
+    if (preview) preview.textContent = data.token.substring(0, 50) + '...';
     const exp = document.getElementById('token-expires-info');
-    if (exp) exp.textContent = 'Expira em: ' + formatDateBR(data.expiraEm);
+    const expFormatted = data.expiraEm ? formatDateBR(data.expiraEm) : '~24h';
+    if (exp) exp.textContent = 'Expira em: ' + expFormatted;
     if (footer) footer.textContent = 'Token ativo ✓';
-    if (statEl) statEl.textContent = formatTimeDiff(data.expiraEm);
+    if (statEl) statEl.textContent = data.expiraEm ? formatTimeDiff(data.expiraEm) : '24h';
     if (statSub) statSub.textContent = 'expira em';
+    if (tokenBtn) {
+      tokenBtn.style.background = 'rgba(0,212,170,0.15)';
+      tokenBtn.style.color = 'var(--accent)';
+      tokenBtn.style.borderColor = 'rgba(0,212,170,0.4)';
+    }
   } else {
     if (card) card.style.display = 'none';
     if (footer) footer.textContent = 'Sem token ativo';
     if (statEl) statEl.textContent = '—';
     if (statSub) statSub.textContent = 'sem token';
+    if (tokenBtn) {
+      tokenBtn.style.background = '';
+      tokenBtn.style.color = '';
+      tokenBtn.style.borderColor = '';
+    }
   }
 }
 
@@ -1426,14 +1510,11 @@ async function searchCep(prefix) {
   const cepInput = document.getElementById(prefix + '-cep');
   const cep = cepInput.value.replace(/\D/g, '');
   if (cep.length !== 8) { toast('CEP deve ter 8 dígitos', 'error'); return; }
-
   if (!state.token) { toast('Gere um token primeiro', 'error'); return; }
 
   try {
-    const resp = await fetch(getURL('cep') + cep, {
-      headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' }
-    });
-    if (!resp.ok) throw new Error('CEP não encontrado');
+    const resp = await coreFetch('/cep/v1/enderecos/' + cep, { method: 'GET' });
+    if (!resp.ok) throw new Error('CEP não encontrado (status ' + resp.status + ')');
     const d = await resp.json();
     const set = (id, val) => { const el = document.getElementById(prefix + id); if(el && val) el.value = val; };
     set('-logradouro', d.logradouro);
@@ -1529,14 +1610,9 @@ async function generateLabel() {
   if (creds?.card) payload.numeroCartaoPostagem = creds.card;
 
   try {
-    const resp = await fetch(getURL('prepostagem'), {
+    const resp = await coreFetch('/prepostagem/v1/prepostagens', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + state.token,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      body: payload,
     });
 
     const data = await resp.json();
@@ -1618,14 +1694,13 @@ async function downloadLabel(preId) {
   if (!state.token) { toast('Token necessário', 'error'); return; }
   toast('Solicitando rótulo...', 'info');
   try {
-    const resp = await fetch(getURL('rotulo'), {
+    const resp = await coreFetch('/prepostagem/v1/prepostagens/rotulo/assincrono/pdf', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-      body: JSON.stringify({ idsPrePostagem: [preId], tipoRotulo: 'P', formatoRotulo: 'ET' }),
+      body: { idsPrePostagem: [preId], tipoRotulo: 'P', formatoRotulo: 'ET' },
     });
     if (!resp.ok) throw new Error('Erro ' + resp.status);
     const data = await resp.json();
-    toast('Rótulo solicitado! ID da solicitação: ' + (data.id || 'OK'), 'success');
+    toast('Rótulo solicitado! ID: ' + (data.id || 'OK') + ' — verifique no painel Correios', 'success', 6000);
   } catch(e) {
     toast('Erro ao solicitar rótulo: ' + e.message, 'error');
   }
@@ -1654,9 +1729,7 @@ async function trackObjects() {
   try {
     const results = [];
     for (const code of codes) {
-      const resp = await fetch(getURL('rastro') + code + '?resultado=T', {
-        headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' }
-      });
+      const resp = await coreFetch('/srorastro/v1/objetos/' + code + '?resultado=T', { method: 'GET' });
       if (!resp.ok) { results.push({ code, error: 'Status ' + resp.status }); continue; }
       const data = await resp.json();
       results.push({ code, data });
@@ -1730,43 +1803,30 @@ async function calcPrice() {
   list.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner" style="width:20px;height:20px"></span></div>';
 
   try {
-    const resp = await fetch(getURL('preco'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' },
-      body: JSON.stringify({
-        idLote: '1',
-        parametrosProduto: services.map((svc, i) => ({
-          coProduto: svc,
-          nuRequisicao: String(i+1),
-          cepOrigem: cepO,
-          cepDestino: cepD,
-          psObjeto: peso,
-          tpObjeto: tipo,
-          comprimento: comp,
-          largura: larg,
-          altura: alt,
-          dtEvento: new Date().toLocaleDateString('pt-BR').split('/').reverse().join('/'),
-        }))
-      }),
-    });
+    const priceBody = {
+      idLote: '1',
+      parametrosProduto: services.map((svc, i) => ({
+        coProduto: svc, nuRequisicao: String(i+1),
+        cepOrigem: cepO, cepDestino: cepD,
+        psObjeto: peso, tpObjeto: tipo,
+        comprimento: comp, largura: larg, altura: alt,
+        dtEvento: new Date().toLocaleDateString('pt-BR').split('/').reverse().join('/'),
+      }))
+    };
+    const prazoBody = {
+      idLote: '1',
+      parametrosPrazo: services.map((svc, i) => ({
+        coProduto: svc, nuRequisicao: String(i+1),
+        cepOrigem: cepO, cepDestino: cepD,
+        dtEvento: new Date().toLocaleDateString('pt-BR'),
+      }))
+    };
 
-    // Also get prazo
-    const prazoResp = await fetch(getURL('prazo'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' },
-      body: JSON.stringify({
-        idLote: '1',
-        parametrosPrazo: services.map((svc, i) => ({
-          coProduto: svc,
-          nuRequisicao: String(i+1),
-          cepOrigem: cepO,
-          cepDestino: cepD,
-          dtEvento: new Date().toLocaleDateString('pt-BR'),
-        }))
-      }),
-    });
-
-    const priceData = resp.ok ? await resp.json() : [];
+    const [priceResp, prazoResp] = await Promise.all([
+      coreFetch('/preco/v1/nacional/', { method: 'POST', body: priceBody }),
+      coreFetch('/prazo/v1/nacional/', { method: 'POST', body: prazoBody }),
+    ]);
+    const priceData = priceResp.ok ? await priceResp.json() : [];
     const prazoData = prazoResp.ok ? await prazoResp.json() : [];
 
     const svcNames = { '03220':'SEDEX','03298':'SEDEX 10','03158':'SEDEX 12','03140':'SEDEX Hoje','03204':'PAC','04162':'SEDEX Contrato','04669':'PAC Contrato' };
@@ -1870,10 +1930,9 @@ async function processBatch() {
       };
       if (state.credentials?.card) payload.numeroCartaoPostagem = state.credentials.card;
 
-      const resp = await fetch(getURL('prepostagem'), {
+      const resp = await coreFetch('/prepostagem/v1/prepostagens', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-        body: JSON.stringify(payload),
+        body: payload,
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.msgs?.join(', ') || 'Erro');
@@ -1918,10 +1977,9 @@ async function downloadBatchLabels(ids) {
   for (let i = 0; i < ids.length; i += 6) chunks.push(ids.slice(i, i+6));
   for (const chunk of chunks) {
     try {
-      await fetch(getURL('rotulo'), {
+      await coreFetch('/prepostagem/v1/prepostagens/rotulo/assincrono/pdf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
-        body: JSON.stringify({ idsPrePostagem: chunk, tipoRotulo: 'P', formatoRotulo: 'ET' }),
+        body: { idsPrePostagem: chunk, tipoRotulo: 'P', formatoRotulo: 'ET' },
       });
     } catch(e) {}
     await new Promise(r => setTimeout(r, 300));
@@ -2022,9 +2080,16 @@ function updateStats() {
 function formatDateBR(dateStr) {
   if (!dateStr) return '—';
   try {
-    const d = new Date(dateStr);
+    // Tenta parsear direto
+    let d = new Date(dateStr);
+    // Se inválido, tenta formato DD/MM/YYYY HH:MM:SS
+    if (isNaN(d.getTime())) {
+      const parts = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+      if (parts) d = new Date(parts[3], parts[2]-1, parts[1], parts[4]||0, parts[5]||0);
+    }
+    if (isNaN(d.getTime())) return String(dateStr);
     return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch { return dateStr; }
+  } catch { return String(dateStr); }
 }
 
 function formatTimeDiff(expStr) {
