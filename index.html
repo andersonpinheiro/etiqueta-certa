@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="description" content="Gerador de etiquetas dos Correios - PWA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CorreioLabel — Etiquetas Inteligentes</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --bg2: #16162a;
+    --bg3: #1e1e35;
+    --bg4: #252540;
+    --accent: #00d4aa;
+    --accent2: #ff6b35;
+    --accent3: #7c3aed;
+    --text: #f0f0f8;
+    --text2: #9090b8;
+    --text3: #5a5a80;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --success: #00d4aa;
+    --error: #ff4d4d;
+    --warning: #ffaa00;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-mono: 'Space Mono', monospace;
+    --font-sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* Grid bg pattern */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== LAYOUT ===== */
+  .app { position: relative; z-index: 1; display: flex; height: 100vh; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    transition: width 0.3s ease;
+  }
+  .logo {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-icon svg { width: 18px; height: 18px; fill: #0f0f1a; }
+  .logo-text { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .logo-sub { font-size: 10px; color: var(--text3); font-family: var(--font-mono); letter-spacing: 0.1em; }
+
+  .nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+  .nav-section { padding: 8px 16px 4px; font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--text3); text-transform: uppercase; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text2);
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(0,212,170,0.07); }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .nav-item span { flex: 1; }
+  .nav-badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    background: var(--accent);
+    color: #0f0f1a;
+    padding: 1px 6px;
+    border-radius: 20px;
+    font-weight: 700;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--font-mono);
+  }
+  .env-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .env-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--warning);
+    animation: pulse 2s infinite;
+  }
+  .env-dot.prod { background: var(--success); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ===== MAIN ===== */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--text); }
+  .topbar-sub { font-size: 12px; color: var(--text3); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.25); }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #0f0f1a; border-color: var(--accent); font-weight: 700; }
+  .btn-primary:hover { background: #00bfa0; border-color: #00bfa0; }
+  .btn-danger { background: rgba(255,77,77,0.15); color: var(--error); border-color: rgba(255,77,77,0.3); }
+  .btn-danger:hover { background: rgba(255,77,77,0.25); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* ===== CONTENT ===== */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+  /* ===== PANELS (tabs) ===== */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-sm);
+    background: rgba(0,212,170,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-icon svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .card-icon.orange { background: rgba(255,107,53,0.12); }
+  .card-icon.orange svg { stroke: var(--accent2); }
+  .card-icon.purple { background: rgba(124,58,237,0.12); }
+  .card-icon.purple svg { stroke: #a78bfa; }
+  .card-title { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.05em; }
+  .card-desc { font-size: 12px; color: var(--text3); margin-top: 1px; }
+
+  /* ===== FORM ELEMENTS ===== */
+  .form-grid { display: grid; gap: 14px; }
+  .form-grid-2 { grid-template-columns: 1fr 1fr; }
+  .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  @media(max-width: 900px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; font-family: var(--font-mono); color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .field label .req { color: var(--accent2); }
+  input, select, textarea {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,170,0.12);
+  }
+  input::placeholder, textarea::placeholder { color: var(--text3); }
+  select option { background: var(--bg3); }
+  textarea { resize: vertical; min-height: 80px; }
+  .field-row { display: flex; gap: 8px; align-items: flex-end; }
+  .field-row .field { flex: 1; }
+
+  /* ===== SECTION DIVIDER ===== */
+  .section-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 20px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ===== CREDENTIALS PANEL ===== */
+  .cred-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: rgba(255,170,0,0.08);
+    border: 1px solid rgba(255,170,0,0.2);
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--warning);
+  }
+  .cred-status.ok { background: rgba(0,212,170,0.08); border-color: rgba(0,212,170,0.2); color: var(--success); }
+  .cred-status svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .token-display {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text3);
+    word-break: break-all;
+    line-height: 1.5;
+    max-height: 80px;
+    overflow: hidden;
+    position: relative;
+  }
+  .token-mask { display: flex; align-items: center; gap: 6px; }
+  .token-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; }
+
+  /* ===== TABS dentro de card ===== */
+  .inner-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .inner-tab {
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .inner-tab:hover { color: var(--text); }
+  .inner-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .inner-panel { display: none; }
+  .inner-panel.active { display: block; }
+
+  /* ===== TABLE ===== */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: var(--bg3); }
+  th {
+    padding: 9px 12px;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ===== BADGES ===== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+  .badge-success { background: rgba(0,212,170,0.12); color: var(--success); }
+  .badge-warning { background: rgba(255,170,0,0.12); color: var(--warning); }
+  .badge-error { background: rgba(255,77,77,0.12); color: var(--error); }
+  .badge-neutral { background: rgba(255,255,255,0.07); color: var(--text2); }
+
+  /* ===== STATS GRID ===== */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .stat-label { font-size: 10px; font-family: var(--font-mono); color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-family: var(--font-mono); font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .stat-card.accent { border-color: rgba(0,212,170,0.25); background: rgba(0,212,170,0.05); }
+  .stat-card.accent .stat-value { color: var(--accent); }
+
+  /* ===== TRACK RESULT ===== */
+  .track-timeline { position: relative; padding-left: 24px; }
+  .track-timeline::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 1px; background: var(--border2); }
+  .track-event {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .track-dot {
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 2px solid var(--border2);
+  }
+  .track-dot.current { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px rgba(0,212,170,0.4); }
+  .track-event-title { font-size: 13px; color: var(--text); font-weight: 500; }
+  .track-event-meta { font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-top: 2px; }
+  .track-event-local { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* ===== PRICE RESULT ===== */
+  .price-result-grid { display: grid; gap: 10px; }
+  .price-result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .price-result-item:hover { border-color: var(--accent); }
+  .price-result-item.selected { border-color: var(--accent); background: rgba(0,212,170,0.06); }
+  .price-svc { font-size: 13px; color: var(--text); font-weight: 500; }
+  .price-prazo { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
+  .price-val { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--accent); }
+
+  /* ===== LOTE ===== */
+  .upload-zone {
+    border: 2px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg3);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(0,212,170,0.05); }
+  .upload-icon { margin-bottom: 12px; color: var(--text3); }
+  .upload-icon svg { width: 36px; height: 36px; }
+  .upload-text { font-size: 13px; color: var(--text2); }
+  .upload-sub { font-size: 11px; color: var(--text3); margin-top: 4px; font-family: var(--font-mono); }
+
+  /* ===== TOAST ===== */
+  .toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 260px;
+    max-width: 360px;
+    animation: slideIn 0.25s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.success { border-color: rgba(0,212,170,0.4); }
+  .toast.error { border-color: rgba(255,77,77,0.4); }
+  .toast.warning { border-color: rgba(255,170,0,0.4); }
+  .toast svg { width: 15px; height: 15px; flex-shrink: 0; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ===== LOADING ===== */
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.15); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== MOBILE NAV ===== */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  }
+  .mobile-nav-items { display: flex; }
+  .mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    transition: color 0.15s;
+  }
+  .mobile-nav-item.active { color: var(--accent); }
+  .mobile-nav-item svg { width: 20px; height: 20px; }
+
+  @media(max-width: 768px) {
+    .sidebar { display: none; }
+    .mobile-nav { display: block; }
+    .content { padding-bottom: 80px; }
+    .topbar { padding: 10px 16px; }
+    .content { padding: 16px; }
+  }
+
+  /* ===== MISC ===== */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text3);
+  }
+  .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-state-text { font-size: 14px; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .flex { display: flex; }
+  .flex-center { display: flex; align-items: center; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+  .text-sm { font-size: 12px; color: var(--text3); }
+  .text-mono { font-family: var(--font-mono); }
+  .text-accent { color: var(--accent); }
+  .text-warning { color: var(--warning); }
+  .text-error { color: var(--error); }
+  .hint {
+    background: rgba(0,212,170,0.06);
+    border: 1px solid rgba(0,212,170,0.15);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .hint svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+
+  /* Print styles */
+  @media print {
+    .sidebar, .topbar, .mobile-nav, .btn, .toast-container { display: none !important; }
+    .content { padding: 0; }
+    .card { break-inside: avoid; }
+    body { background: white; color: black; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10" fill="none" stroke="#0f0f1a" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div class="logo-text">CorreioLabel</div>
+        <div class="logo-sub">v1.0 · PWA</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" data-panel="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+      </div>
+      <div class="nav-item" data-panel="credentials">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <span>Credenciais</span>
+      </div>
+
+      <div class="nav-section">Etiquetas</div>
+      <div class="nav-item" data-panel="single">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg>
+        <span>Individual</span>
+      </div>
+      <div class="nav-item" data-panel="batch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span>Lote (CSV)</span>
+      </div>
+
+      <div class="nav-section">Consultas</div>
+      <div class="nav-item" data-panel="tracking">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+        <span>Rastreamento</span>
+      </div>
+      <div class="nav-item" data-panel="price">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        <span>Preço e Prazo</span>
+      </div>
+      <div class="nav-item" data-panel="history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+        <span>Histórico</span>
+        <span class="nav-badge" id="history-badge">0</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="env-indicator">
+        <div class="env-dot" id="env-dot"></div>
+        <span id="env-label">Homologação</span>
+      </div>
+      <span id="token-status-footer">Sem token ativo</span>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div class="topbar-sub" id="topbar-sub">Visão geral do sistema</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-sm" onclick="toggleEnv()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <span id="env-btn-text">→ Produção</span>
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="refreshToken()" id="token-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+          Gerar Token
+        </button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ===== DASHBOARD ===== -->
+      <div class="panel active" id="panel-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card accent">
+            <div class="stat-label">Etiquetas Hoje</div>
+            <div class="stat-value" id="stat-today">0</div>
+            <div class="stat-sub">pré-postagens</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Histórico</div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-sub">desde o início</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Lotes Enviados</div>
+            <div class="stat-value" id="stat-lots">0</div>
+            <div class="stat-sub">processamentos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Token Expira</div>
+            <div class="stat-value" id="stat-token" style="font-size:16px;margin-top:4px">—</div>
+            <div class="stat-sub" id="stat-token-sub">sem token ativo</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Últimas Etiquetas</div>
+              <div class="card-desc">Pré-postagens recentes</div>
+            </div>
+          </div>
+          <div id="recent-list">
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+              <div class="empty-state-text">Nenhuma etiqueta gerada ainda</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div>Configure suas credenciais em <strong style="color:var(--accent)">Credenciais</strong> e gere o token antes de usar as APIs. O token expira em 24h — use o botão "Gerar Token" para renovar.</div>
+        </div>
+      </div>
+
+      <!-- ===== CREDENCIAIS ===== -->
+      <div class="panel" id="panel-credentials">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon purple">
+              <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Configuração de Acesso</div>
+              <div class="card-desc">Credenciais do Meu Correios + Cartão de Postagem</div>
+            </div>
+          </div>
+
+          <div id="cred-status-msg" class="cred-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Configure suas credenciais para acessar as APIs dos Correios
+          </div>
+
+          <div class="form-grid">
+            <div class="form-grid form-grid-2">
+              <div class="field">
+                <label>Usuário Meu Correios <span class="req">*</span></label>
+                <input type="text" id="cred-user" placeholder="seu.usuario@email.com" autocomplete="username">
+              </div>
+              <div class="field">
+                <label>Senha do Componente <span class="req">*</span></label>
+                <input type="password" id="cred-pass" placeholder="••••••••" autocomplete="current-password">
+              </div>
+            </div>
+            <div class="field">
+              <label>Cartão de Postagem <span class="req">*</span></label>
+              <input type="text" id="cred-card" placeholder="Ex: 0076362639" maxlength="15">
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label>Ambiente</label>
+              <select id="cred-env">
+                <option value="hom">Homologação (testes)</option>
+                <option value="prod">Produção</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Nº Contrato (opcional)</label>
+              <input type="text" id="cred-contract" placeholder="Ex: 9912420292">
+            </div>
+          </div>
+
+          <div class="mt-16 flex gap-8">
+            <button class="btn btn-primary" onclick="saveCredentials()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+              Salvar e Gerar Token
+            </button>
+            <button class="btn" onclick="clearCredentials()">Limpar</button>
+          </div>
+        </div>
+
+        <div class="card" id="token-card" style="display:none">
+          <div class="card-header">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Token Ativo</div>
+              <div class="card-desc" id="token-expires-info">—</div>
+            </div>
+          </div>
+          <div class="token-display">
+            <div class="token-mask">
+              <span class="token-dot"></span>
+              <span id="token-preview" style="color:var(--text2)">Token carregado com sucesso</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ETIQUETA INDIVIDUAL ===== -->
+      <div class="panel" id="panel-single">
+        <div class="inner-tabs">
+          <div class="inner-tab active" data-inner="single-form">Dados do Envio</div>
+          <div class="inner-tab" data-inner="single-result">Etiqueta Gerada</div>
+        </div>
+
+        <div class="inner-panel active" id="single-form">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div><div class="card-title">Remetente</div></div>
+            </div>
+            <div class="form-grid">
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Nome <span class="req">*</span></label>
+                  <input type="text" id="s-rem-nome" placeholder="Nome do remetente" value="">
+                </div>
+                <div class="field">
+                  <label>CPF/CNPJ</label>
+                  <input type="text" id="s-rem-cpf" placeholder="000.000.000-00" maxlength="18">
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>CEP <span class="req">*</span></label>
+                  <div class="field-row">
+                    <input type="text" id="s-rem-cep" placeholder="00000-000" maxlength="9" style="flex:1">
+                    <button class="btn btn-sm" onclick="searchCep('s-rem')">🔍</button>
+                  </div>
+                </div>
+                <div class="field" style="grid-column: span 2">
+                  <label>Logradouro</label>
+                  <input type="text" id="s-rem-logradouro" placeholder="Rua, Av...">
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>Número</label>
+                  <input type="text" id="s-rem-numero" placeholder="123">
+                </div>
+                <div class="field">
+                  <label>Bairro</label>
+                  <input type="text" id="s-rem-bairro" placeholder="Bairro">
+                </div>
+                <div class="field">
+                  <label>Cidade / UF</label>
+                  <div class="field-row">
+                    <input type="text" id="s-rem-cidade" placeholder="Cidade" style="flex:1">
+                    <input type="text" id="s-rem-uf" placeholder="SP" maxlength="2" style="width:50px">
+                  </div>
+                </div>
+              </div>
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Telefone</label>
+                  <input type="tel" id="s-rem-tel" placeholder="(11) 99999-9999">
+                </div>
+                <div class="field">
+                  <label>E-mail</label>
+                  <input type="email" id="s-rem-email" placeholder="email@exemplo.com">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon orange">
+                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div><div class="card-title">Destinatário</div></div>
+            </div>
+            <div class="form-grid">
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Nome <span class="req">*</span></label>
+                  <input type="text" id="s-dest-nome" placeholder="Nome do destinatário">
+                </div>
+                <div class="field">
+                  <label>CPF/CNPJ</label>
+                  <input type="text" id="s-dest-cpf" placeholder="000.000.000-00" maxlength="18">
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>CEP <span class="req">*</span></label>
+                  <div class="field-row">
+                    <input type="text" id="s-dest-cep" placeholder="00000-000" maxlength="9" style="flex:1">
+                    <button class="btn btn-sm" onclick="searchCep('s-dest')">🔍</button>
+                  </div>
+                </div>
+                <div class="field" style="grid-column: span 2">
+                  <label>Logradouro</label>
+                  <input type="text" id="s-dest-logradouro" placeholder="Rua, Av...">
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>Número <span class="req">*</span></label>
+                  <input type="text" id="s-dest-numero" placeholder="123">
+                </div>
+                <div class="field">
+                  <label>Complemento</label>
+                  <input type="text" id="s-dest-comp" placeholder="Apto, Sala...">
+                </div>
+                <div class="field">
+                  <label>Bairro</label>
+                  <input type="text" id="s-dest-bairro" placeholder="Bairro">
+                </div>
+              </div>
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Cidade</label>
+                  <input type="text" id="s-dest-cidade" placeholder="Cidade">
+                </div>
+                <div class="field">
+                  <label>UF</label>
+                  <input type="text" id="s-dest-uf" placeholder="SP" maxlength="2">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon purple">
+                <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+              </div>
+              <div><div class="card-title">Objeto e Serviço</div></div>
+            </div>
+            <div class="form-grid">
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Serviço / Produto <span class="req">*</span></label>
+                  <select id="s-servico">
+                    <option value="">Selecione o serviço</option>
+                    <option value="03220">SEDEX (03220)</option>
+                    <option value="03298">SEDEX 10 (03298)</option>
+                    <option value="03158">SEDEX 12 (03158)</option>
+                    <option value="03140">SEDEX Hoje (03140)</option>
+                    <option value="03204">PAC (03204)</option>
+                    <option value="04227">PAC (04227)</option>
+                    <option value="04162">SEDEX (04162)</option>
+                    <option value="04669">PAC (04669)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Tipo de Objeto</label>
+                  <select id="s-tipo-obj">
+                    <option value="2">Pacote/Caixa (2)</option>
+                    <option value="1">Envelope/Carta (1)</option>
+                    <option value="3">Rolo/Cilindro (3)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>Peso (g) <span class="req">*</span></label>
+                  <input type="number" id="s-peso" placeholder="300" min="1" max="30000">
+                </div>
+                <div class="field">
+                  <label>Comprimento (cm)</label>
+                  <input type="number" id="s-comprimento" placeholder="20" min="1">
+                </div>
+                <div class="field">
+                  <label>Largura (cm)</label>
+                  <input type="number" id="s-largura" placeholder="15" min="1">
+                </div>
+              </div>
+              <div class="form-grid form-grid-3">
+                <div class="field">
+                  <label>Altura (cm)</label>
+                  <input type="number" id="s-altura" placeholder="10" min="1">
+                </div>
+                <div class="field">
+                  <label>Valor Declarado (R$)</label>
+                  <input type="number" id="s-valor" placeholder="100.00" step="0.01">
+                </div>
+                <div class="field">
+                  <label>Nota Fiscal</label>
+                  <input type="text" id="s-nf" placeholder="NF-001234">
+                </div>
+              </div>
+              <div class="field">
+                <label>Observação / Conteúdo</label>
+                <textarea id="s-obs" placeholder="Descreva o conteúdo do pacote..." rows="2"></textarea>
+              </div>
+              <div class="form-grid form-grid-2">
+                <div class="field">
+                  <label>Serviços Adicionais</label>
+                  <select id="s-adicionais" multiple style="height:80px">
+                    <option value="019">Aviso de Recebimento (AR)</option>
+                    <option value="001">Mão Própria</option>
+                    <option value="064">Logística Reversa</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Tipo de Documento</label>
+                  <select id="s-tipo-doc">
+                    <option value="NF">Nota Fiscal</option>
+                    <option value="NE">Nota Fiscal Eletrônica</option>
+                    <option value="N">Não</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-16 flex gap-8">
+              <button class="btn btn-primary" onclick="generateLabel()" id="gen-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg>
+                Gerar Etiqueta
+              </button>
+              <button class="btn" onclick="clearSingleForm()">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Single Result -->
+        <div class="inner-panel" id="single-result">
+          <div id="label-result-container">
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg>
+              <div class="empty-state-text">Nenhuma etiqueta gerada ainda</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== LOTE (CSV) ===== -->
+      <div class="panel" id="panel-batch">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon orange">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Postagem em Lote</div>
+              <div class="card-desc">Envie múltiplas etiquetas via CSV</div>
+            </div>
+          </div>
+
+          <div class="hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div>O CSV deve conter as colunas: <strong style="color:var(--accent)">rem_nome, rem_cep, dest_nome, dest_cep, dest_numero, servico, peso</strong>. <a href="#" onclick="downloadTemplate()" style="color:var(--accent)">Baixar template</a></div>
+          </div>
+
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragleave="handleDragLeave(event)">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="upload-text">Arraste o CSV aqui ou clique para selecionar</div>
+            <div class="upload-sub">Formato: .csv · Máx: 50 itens por lote</div>
+          </div>
+          <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(event)">
+
+          <div id="csv-preview" style="display:none;margin-top:16px">
+            <div class="section-title">Preview do CSV</div>
+            <div class="table-wrap" id="csv-table-wrap"></div>
+            <div class="mt-16 flex gap-8">
+              <button class="btn btn-primary" onclick="processBatch()" id="process-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polygon points="5,3 19,12 5,21 5,3"/></svg>
+                Processar Lote
+              </button>
+              <button class="btn btn-danger" onclick="clearCSV()">Cancelar</button>
+            </div>
+          </div>
+
+          <div id="batch-result" style="display:none;margin-top:16px">
+            <div class="section-title">Resultado do Lote</div>
+            <div id="batch-result-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== RASTREAMENTO ===== -->
+      <div class="panel" id="panel-tracking">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Rastreamento de Objetos</div>
+              <div class="card-desc">Consulte até 5 objetos por vez</div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label>Código(s) de Rastreio <span class="req">*</span></label>
+              <textarea id="track-codes" placeholder="AA123456789BR&#10;BB987654321BR&#10;(um por linha)" rows="4"></textarea>
+            </div>
+          </div>
+          <div class="mt-16">
+            <button class="btn btn-primary" onclick="trackObjects()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Rastrear
+            </button>
+          </div>
+        </div>
+
+        <div id="tracking-results"></div>
+      </div>
+
+      <!-- ===== PREÇO E PRAZO ===== -->
+      <div class="panel" id="panel-price">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Simulação de Preço e Prazo</div>
+              <div class="card-desc">Compare serviços disponíveis</div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-grid form-grid-2">
+              <div class="field">
+                <label>CEP Origem <span class="req">*</span></label>
+                <input type="text" id="p-cep-orig" placeholder="00000-000" maxlength="9">
+              </div>
+              <div class="field">
+                <label>CEP Destino <span class="req">*</span></label>
+                <input type="text" id="p-cep-dest" placeholder="00000-000" maxlength="9">
+              </div>
+            </div>
+            <div class="form-grid form-grid-3">
+              <div class="field">
+                <label>Peso (g) <span class="req">*</span></label>
+                <input type="number" id="p-peso" placeholder="300" min="1">
+              </div>
+              <div class="field">
+                <label>Comprimento (cm)</label>
+                <input type="number" id="p-comp" placeholder="20" min="1">
+              </div>
+              <div class="field">
+                <label>Largura (cm)</label>
+                <input type="number" id="p-larg" placeholder="15" min="1">
+              </div>
+            </div>
+            <div class="form-grid form-grid-3">
+              <div class="field">
+                <label>Altura (cm)</label>
+                <input type="number" id="p-alt" placeholder="10" min="1">
+              </div>
+              <div class="field">
+                <label>Tipo Objeto</label>
+                <select id="p-tipo">
+                  <option value="2">Pacote/Caixa</option>
+                  <option value="1">Envelope</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Valor Declarado (R$)</label>
+                <input type="number" id="p-valor" placeholder="100" step="0.01">
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-16">
+            <button class="btn btn-primary" onclick="calcPrice()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+              Calcular
+            </button>
+          </div>
+        </div>
+
+        <div id="price-results" style="display:none">
+          <div class="section-title">Opções Disponíveis</div>
+          <div class="price-result-grid" id="price-list"></div>
+        </div>
+      </div>
+
+      <!-- ===== HISTÓRICO ===== -->
+      <div class="panel" id="panel-history">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Histórico de Etiquetas</div>
+              <div class="card-desc">Todas as pré-postagens geradas</div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn btn-sm" onclick="exportHistory()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportar CSV
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="clearHistory()">Limpar</button>
+            </div>
+          </div>
+          <div id="history-table-wrap">
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>
+              <div class="empty-state-text">Nenhum registro ainda</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<!-- MOBILE NAV -->
+<div class="mobile-nav">
+  <div class="mobile-nav-items">
+    <div class="mobile-nav-item active" data-panel="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Início
+    </div>
+    <div class="mobile-nav-item" data-panel="credentials">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Creds
+    </div>
+    <div class="mobile-nav-item" data-panel="single">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg>
+      Etiqueta
+    </div>
+    <div class="mobile-nav-item" data-panel="tracking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+      Rastrear
+    </div>
+    <div class="mobile-nav-item" data-panel="price">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Preço
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ===== STATE =====
+const state = {
+  env: 'hom',
+  token: null,
+  tokenExpires: null,
+  credentials: null,
+  history: JSON.parse(localStorage.getItem('cl_history') || '[]'),
+  stats: JSON.parse(localStorage.getItem('cl_stats') || '{"today":0,"total":0,"lots":0}'),
+  csvData: [],
+};
+
+// ===== URLS =====
+const API = {
+  hom: {
+    token: 'https://apihom.correios.com.br/token/v1/autentica/cartaopostagem',
+    cep: 'https://apihom.correios.com.br/cep/v1/enderecos/',
+    prepostagem: 'https://apihom.correios.com.br/prepostagem/v1/prepostagens',
+    rotulo: 'https://apihom.correios.com.br/prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
+    rastro: 'https://apihom.correios.com.br/srorastro/v1/objetos/',
+    preco: 'https://apihom.correios.com.br/preco/v1/nacional/',
+    prazo: 'https://apihom.correios.com.br/prazo/v1/nacional/',
+  },
+  prod: {
+    token: 'https://api.correios.com.br/token/v1/autentica/cartaopostagem',
+    cep: 'https://api.correios.com.br/cep/v1/enderecos/',
+    prepostagem: 'https://api.correios.com.br/prepostagem/v1/prepostagens',
+    rotulo: 'https://api.correios.com.br/prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
+    rastro: 'https://api.correios.com.br/srorastro/v1/objetos/',
+    preco: 'https://api.correios.com.br/preco/v1/nacional/',
+    prazo: 'https://api.correios.com.br/prazo/v1/nacional/',
+  }
+};
+
+function getURL(key) { return API[state.env][key]; }
+
+// ===== NAVIGATION =====
+function navigate(panelId) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-item').forEach(n => n.classList.remove('active'));
+
+  const panel = document.getElementById('panel-' + panelId);
+  if (panel) panel.classList.add('active');
+
+  document.querySelectorAll('[data-panel="' + panelId + '"]').forEach(el => el.classList.add('active'));
+
+  const titles = {
+    dashboard: ['Dashboard', 'Visão geral do sistema'],
+    credentials: ['Credenciais', 'Configure seu acesso às APIs'],
+    single: ['Etiqueta Individual', 'Gerar uma pré-postagem'],
+    batch: ['Lote CSV', 'Processamento em massa'],
+    tracking: ['Rastreamento', 'Consultar status de objetos'],
+    price: ['Preço e Prazo', 'Simulação de frete'],
+    history: ['Histórico', 'Todas as etiquetas geradas'],
+  };
+  if (titles[panelId]) {
+    document.getElementById('topbar-title').textContent = titles[panelId][0];
+    document.getElementById('topbar-sub').textContent = titles[panelId][1];
+  }
+}
+
+document.querySelectorAll('[data-panel]').forEach(el => {
+  el.addEventListener('click', () => navigate(el.dataset.panel));
+});
+
+// Inner tabs
+document.querySelectorAll('.inner-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const targetId = tab.dataset.inner;
+    const parent = tab.closest('.panel');
+    parent.querySelectorAll('.inner-tab').forEach(t => t.classList.remove('active'));
+    parent.querySelectorAll('.inner-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const target = document.getElementById(targetId);
+    if (target) target.classList.add('active');
+  });
+});
+
+// ===== TOAST =====
+function toast(msg, type = 'info', duration = 4000) {
+  const tc = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  };
+  t.innerHTML = (icons[type] || icons.info) + '<span>' + msg + '</span>';
+  tc.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(100%)'; t.style.transition = 'all 0.3s'; setTimeout(() => t.remove(), 300); }, duration);
+}
+
+// ===== ENV TOGGLE =====
+function toggleEnv() {
+  state.env = state.env === 'hom' ? 'prod' : 'hom';
+  const isProd = state.env === 'prod';
+  document.getElementById('env-btn-text').textContent = isProd ? '→ Homologação' : '→ Produção';
+  document.getElementById('env-label').textContent = isProd ? 'Produção' : 'Homologação';
+  const dot = document.getElementById('env-dot');
+  dot.className = 'env-dot' + (isProd ? ' prod' : '');
+  if (document.getElementById('cred-env')) {
+    document.getElementById('cred-env').value = state.env;
+  }
+  state.token = null;
+  state.tokenExpires = null;
+  updateTokenUI(null);
+  toast(isProd ? '🔴 Ambiente: Produção' : '🟡 Ambiente: Homologação', 'warning');
+}
+
+// ===== CREDENTIALS =====
+function loadCredentials() {
+  const saved = localStorage.getItem('cl_creds');
+  if (!saved) return;
+  try {
+    const creds = JSON.parse(atob(saved));
+    state.credentials = creds;
+    if (document.getElementById('cred-user')) {
+      document.getElementById('cred-user').value = creds.user || '';
+      document.getElementById('cred-card').value = creds.card || '';
+      document.getElementById('cred-contract').value = creds.contract || '';
+      document.getElementById('cred-env').value = creds.env || 'hom';
+      if (creds.env) { state.env = creds.env; }
+    }
+    updateCredStatus(true);
+  } catch(e) {}
+}
+
+function saveCredentials() {
+  const user = document.getElementById('cred-user').value.trim();
+  const pass = document.getElementById('cred-pass').value;
+  const card = document.getElementById('cred-card').value.trim();
+  const env = document.getElementById('cred-env').value;
+
+  if (!user || !pass || !card) { toast('Preencha usuário, senha e cartão de postagem', 'error'); return; }
+
+  state.credentials = { user, pass, card, contract: document.getElementById('cred-contract').value.trim(), env };
+  state.env = env;
+  localStorage.setItem('cl_creds', btoa(JSON.stringify(state.credentials)));
+  updateCredStatus(true);
+  toast('Credenciais salvas! Gerando token...', 'success');
+  refreshToken();
+}
+
+function clearCredentials() {
+  localStorage.removeItem('cl_creds');
+  state.credentials = null;
+  state.token = null;
+  ['cred-user','cred-pass','cred-card','cred-contract'].forEach(id => { document.getElementById(id).value = ''; });
+  updateCredStatus(false);
+  updateTokenUI(null);
+  toast('Credenciais removidas', 'info');
+}
+
+function updateCredStatus(ok) {
+  const el = document.getElementById('cred-status-msg');
+  if (!el) return;
+  if (ok) {
+    el.className = 'cred-status ok';
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg> Credenciais configuradas para: <strong style="margin-left:4px">' + (state.credentials?.user || '') + '</strong>';
+  } else {
+    el.className = 'cred-status';
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Configure suas credenciais para acessar as APIs dos Correios';
+  }
+}
+
+// ===== TOKEN =====
+async function refreshToken() {
+  if (!state.credentials) { toast('Configure as credenciais primeiro', 'error'); navigate('credentials'); return; }
+
+  const btn = document.getElementById('token-btn');
+  btn.innerHTML = '<span class="spinner"></span> Gerando...';
+  btn.disabled = true;
+
+  try {
+    const { user, pass, card } = state.credentials;
+    const basicAuth = btoa(user + ':' + pass);
+
+    const resp = await fetch(getURL('token'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + basicAuth,
+      },
+      body: JSON.stringify({ numero: card }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error('Status ' + resp.status + ': ' + err.substring(0, 100));
+    }
+
+    const data = await resp.json();
+    state.token = data.token;
+    state.tokenExpires = data.expiraEm;
+    updateTokenUI(data);
+    toast('Token gerado com sucesso! Válido até ' + formatDateBR(data.expiraEm), 'success');
+
+  } catch(e) {
+    toast('Erro ao gerar token: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Gerar Token';
+    btn.disabled = false;
+  }
+}
+
+function updateTokenUI(data) {
+  const card = document.getElementById('token-card');
+  const footer = document.getElementById('token-status-footer');
+  const statEl = document.getElementById('stat-token');
+  const statSub = document.getElementById('stat-token-sub');
+
+  if (data && data.token) {
+    if (card) card.style.display = 'block';
+    const preview = document.getElementById('token-preview');
+    if (preview) preview.textContent = data.token.substring(0, 40) + '...';
+    const exp = document.getElementById('token-expires-info');
+    if (exp) exp.textContent = 'Expira em: ' + formatDateBR(data.expiraEm);
+    if (footer) footer.textContent = 'Token ativo ✓';
+    if (statEl) statEl.textContent = formatTimeDiff(data.expiraEm);
+    if (statSub) statSub.textContent = 'expira em';
+  } else {
+    if (card) card.style.display = 'none';
+    if (footer) footer.textContent = 'Sem token ativo';
+    if (statEl) statEl.textContent = '—';
+    if (statSub) statSub.textContent = 'sem token';
+  }
+}
+
+// ===== CEP SEARCH =====
+async function searchCep(prefix) {
+  const cepInput = document.getElementById(prefix + '-cep');
+  const cep = cepInput.value.replace(/\D/g, '');
+  if (cep.length !== 8) { toast('CEP deve ter 8 dígitos', 'error'); return; }
+
+  if (!state.token) { toast('Gere um token primeiro', 'error'); return; }
+
+  try {
+    const resp = await fetch(getURL('cep') + cep, {
+      headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' }
+    });
+    if (!resp.ok) throw new Error('CEP não encontrado');
+    const d = await resp.json();
+    const set = (id, val) => { const el = document.getElementById(prefix + id); if(el && val) el.value = val; };
+    set('-logradouro', d.logradouro);
+    set('-bairro', d.bairro);
+    set('-cidade', d.localidade);
+    set('-uf', d.uf);
+    toast('CEP encontrado: ' + d.localidade + '/' + d.uf, 'success');
+  } catch(e) {
+    toast('Erro ao buscar CEP: ' + e.message, 'error');
+  }
+}
+
+// CEP formatting
+['s-rem-cep','s-dest-cep','p-cep-orig','p-cep-dest'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', function() {
+    let v = this.value.replace(/\D/g,'').substring(0,8);
+    if (v.length > 5) v = v.substring(0,5) + '-' + v.substring(5);
+    this.value = v;
+  });
+});
+
+// ===== GENERATE LABEL =====
+async function generateLabel() {
+  if (!state.token) { toast('Gere um token primeiro', 'error'); navigate('credentials'); return; }
+
+  const g = id => document.getElementById(id)?.value?.trim() || '';
+  const required = [
+    { id: 's-rem-nome', label: 'Nome do remetente' },
+    { id: 's-rem-cep', label: 'CEP do remetente' },
+    { id: 's-dest-nome', label: 'Nome do destinatário' },
+    { id: 's-dest-cep', label: 'CEP do destinatário' },
+    { id: 's-dest-numero', label: 'Número do destinatário' },
+    { id: 's-servico', label: 'Serviço' },
+    { id: 's-peso', label: 'Peso' },
+  ];
+  for (const r of required) {
+    if (!g(r.id)) { toast('Campo obrigatório: ' + r.label, 'error'); return; }
+  }
+
+  const btn = document.getElementById('gen-btn');
+  btn.innerHTML = '<span class="spinner"></span> Gerando...';
+  btn.disabled = true;
+
+  // Build payload
+  const creds = state.credentials;
+  const adicionais = Array.from(document.getElementById('s-adicionais').selectedOptions).map(o => ({coServAdicional: o.value}));
+  const payload = {
+    codigoServico: g('s-servico'),
+    codigoFormatoObjetoInformado: g('s-tipo-obj') || '2',
+    alturaInformada: g('s-altura') || '0',
+    larguraInformada: g('s-largura') || '0',
+    comprimentoInformado: g('s-comprimento') || '0',
+    diametroInformado: '',
+    pesoCubico: '0',
+    pesoInformado: g('s-peso'),
+    tipoDocumento: g('s-tipo-doc') || 'NF',
+    precoPostagem: 0,
+    remetente: {
+      nome: g('s-rem-nome'),
+      dddTelefone: g('s-rem-tel').replace(/\D/g,'').substring(0,2),
+      telefone: g('s-rem-tel').replace(/\D/g,'').substring(2),
+      celular: '',
+      email: g('s-rem-email'),
+      cpfCnpj: g('s-rem-cpf').replace(/\D/g,''),
+      endereco: {
+        cep: g('s-rem-cep').replace(/\D/g,''),
+        logradouro: g('s-rem-logradouro'),
+        numero: g('s-rem-numero') || 'SN',
+        complemento: '',
+        bairro: g('s-rem-bairro'),
+        cidade: g('s-rem-cidade'),
+        uf: g('s-rem-uf'),
+      }
+    },
+    destinatarios: [{
+      nome: g('s-dest-nome'),
+      cpfCnpj: g('s-dest-cpf').replace(/\D/g,''),
+      email: g('s-dest-email') || '',
+      endereco: {
+        cep: g('s-dest-cep').replace(/\D/g,''),
+        logradouro: g('s-dest-logradouro'),
+        numero: g('s-dest-numero'),
+        complemento: g('s-dest-comp'),
+        bairro: g('s-dest-bairro'),
+        cidade: g('s-dest-cidade'),
+        uf: g('s-dest-uf'),
+      }
+    }],
+    servicosAdicionais: adicionais,
+    observacao: g('s-obs'),
+  };
+  if (creds?.card) payload.numeroCartaoPostagem = creds.card;
+
+  try {
+    const resp = await fetch(getURL('prepostagem'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.token,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data?.msgs?.join(', ') || data?.message || 'Erro na API');
+
+    // Save to history
+    const entry = {
+      id: data.id || ('LOCAL-' + Date.now()),
+      destNome: g('s-dest-nome'),
+      destCep: g('s-dest-cep'),
+      servico: g('s-servico'),
+      peso: g('s-peso'),
+      date: new Date().toISOString(),
+      status: 'gerado',
+      payload: data,
+    };
+    state.history.unshift(entry);
+    if (state.history.length > 200) state.history.pop();
+    localStorage.setItem('cl_history', JSON.stringify(state.history));
+
+    // Update stats
+    state.stats.total++;
+    state.stats.today++;
+    localStorage.setItem('cl_stats', JSON.stringify(state.stats));
+    updateStats();
+
+    showLabelResult(data, entry);
+    toast('Etiqueta gerada com sucesso! ID: ' + entry.id, 'success');
+    navigate('single');
+    document.querySelector('[data-inner="single-result"]')?.click();
+
+  } catch(e) {
+    toast('Erro ao gerar etiqueta: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg> Gerar Etiqueta';
+    btn.disabled = false;
+  }
+}
+
+function showLabelResult(data, entry) {
+  const c = document.getElementById('label-result-container');
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon"><svg viewBox="0 0 24 24"><polyline points="20,6 9,17 4,12"/></svg></div>
+        <div>
+          <div class="card-title">Pré-Postagem Gerada</div>
+          <div class="card-desc">ID: <span style="color:var(--accent);font-family:var(--font-mono)">${entry.id}</span></div>
+        </div>
+        <span class="badge badge-success" style="margin-left:auto">✓ GERADO</span>
+      </div>
+      <div class="form-grid form-grid-2" style="margin-bottom:16px">
+        <div><div class="text-sm text-mono">DESTINATÁRIO</div><div style="color:var(--text);font-weight:500;margin-top:2px">${entry.destNome}</div><div class="text-sm" style="margin-top:2px">CEP ${entry.destCep}</div></div>
+        <div><div class="text-sm text-mono">SERVIÇO / PESO</div><div style="color:var(--text);font-weight:500;margin-top:2px">Cód. ${entry.servico}</div><div class="text-sm" style="margin-top:2px">${entry.peso}g</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="downloadLabel('${entry.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar Rótulo PDF
+        </button>
+        <button class="btn" onclick="printLabel('${entry.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
+        <button class="btn" onclick="navigate('single');document.querySelector('[data-inner=single-form]').click()">Nova Etiqueta</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Dados da API</div></div></div>
+      <pre style="font-family:var(--font-mono);font-size:11px;color:var(--text2);background:var(--bg3);padding:12px;border-radius:var(--radius-sm);overflow:auto;max-height:200px">${JSON.stringify(data, null, 2)}</pre>
+    </div>
+  `;
+  updateHistoryTable();
+}
+
+async function downloadLabel(preId) {
+  if (!state.token) { toast('Token necessário', 'error'); return; }
+  toast('Solicitando rótulo...', 'info');
+  try {
+    const resp = await fetch(getURL('rotulo'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+      body: JSON.stringify({ idsPrePostagem: [preId], tipoRotulo: 'P', formatoRotulo: 'ET' }),
+    });
+    if (!resp.ok) throw new Error('Erro ' + resp.status);
+    const data = await resp.json();
+    toast('Rótulo solicitado! ID da solicitação: ' + (data.id || 'OK'), 'success');
+  } catch(e) {
+    toast('Erro ao solicitar rótulo: ' + e.message, 'error');
+  }
+}
+
+function printLabel(preId) { window.print(); }
+
+function clearSingleForm() {
+  document.querySelectorAll('#panel-single input, #panel-single textarea, #panel-single select').forEach(el => {
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    else el.value = '';
+  });
+  toast('Formulário limpo', 'info');
+}
+
+// ===== TRACKING =====
+async function trackObjects() {
+  const codes = document.getElementById('track-codes').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+  if (codes.length === 0) { toast('Informe pelo menos um código', 'error'); return; }
+  if (codes.length > 5) { toast('Máximo de 5 objetos por consulta', 'warning'); return; }
+  if (!state.token) { toast('Gere um token primeiro', 'error'); return; }
+
+  const container = document.getElementById('tracking-results');
+  container.innerHTML = '<div style="text-align:center;padding:32px"><span class="spinner" style="width:24px;height:24px"></span><div style="margin-top:8px;color:var(--text3)">Consultando...</div></div>';
+
+  try {
+    const results = [];
+    for (const code of codes) {
+      const resp = await fetch(getURL('rastro') + code + '?resultado=T', {
+        headers: { 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' }
+      });
+      if (!resp.ok) { results.push({ code, error: 'Status ' + resp.status }); continue; }
+      const data = await resp.json();
+      results.push({ code, data });
+    }
+    renderTrackingResults(results);
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-text text-error">Erro: ' + e.message + '</div></div>';
+    toast('Erro no rastreamento: ' + e.message, 'error');
+  }
+}
+
+function renderTrackingResults(results) {
+  const c = document.getElementById('tracking-results');
+  c.innerHTML = results.map(r => {
+    if (r.error) return `<div class="card"><div class="card-header"><div><div class="card-title">${r.code}</div></div><span class="badge badge-error">Erro</span></div><div class="text-sm">${r.error}</div></div>`;
+
+    const obj = r.data?.objetos?.[0];
+    if (!obj) return `<div class="card"><div class="card-title">${r.code}</div><div class="text-sm">Objeto não encontrado</div></div>`;
+
+    const events = (obj.eventos || []).slice(0, 8);
+    const status = events[0];
+
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div>
+          <div>
+            <div class="card-title">${obj.codObjeto}</div>
+            <div class="card-desc">${obj.tipoPostal?.descricao || ''} · ${obj.tipoPostal?.categoria || ''}</div>
+          </div>
+          <span class="badge badge-${status?.codigo === 'BDE' ? 'success' : 'warning'}" style="margin-left:auto">${status?.descricao || '—'}</span>
+        </div>
+        <div class="form-grid form-grid-2" style="margin-bottom:16px">
+          <div><div class="text-sm text-mono">PREVISÃO</div><div style="color:var(--text);margin-top:2px">${obj.dtPrevista ? formatDateBR(obj.dtPrevista) : '—'}</div></div>
+          <div><div class="text-sm text-mono">PESO / FORMATO</div><div style="color:var(--text);margin-top:2px">${obj.peso || '—'} kg · ${obj.formato || '—'}</div></div>
+        </div>
+        <div class="section-title">Eventos</div>
+        <div class="track-timeline">
+          ${events.map((ev, i) => `
+            <div class="track-event">
+              <div class="track-dot ${i === 0 ? 'current' : ''}"></div>
+              <div class="track-event-title">${ev.descricao}</div>
+              <div class="track-event-local">${ev.unidade?.endereco?.cidade || ''} ${ev.unidade?.endereco?.uf ? '/' + ev.unidade.endereco.uf : ''}</div>
+              <div class="track-event-meta">${ev.dtHrCriado ? formatDateBR(ev.dtHrCriado) : ''} · ${ev.codigo || ''}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== PRICE =====
+async function calcPrice() {
+  const g = id => document.getElementById(id)?.value?.trim() || '';
+  if (!g('p-cep-orig') || !g('p-cep-dest') || !g('p-peso')) { toast('Preencha CEPs e peso', 'error'); return; }
+  if (!state.token) { toast('Gere um token primeiro', 'error'); return; }
+
+  const services = ['03220','03298','03204','04162','04669'];
+  const cepO = g('p-cep-orig').replace(/\D/g,'');
+  const cepD = g('p-cep-dest').replace(/\D/g,'');
+  const peso = g('p-peso');
+  const comp = g('p-comp') || '20';
+  const larg = g('p-larg') || '15';
+  const alt = g('p-alt') || '10';
+  const tipo = g('p-tipo') || '2';
+
+  const container = document.getElementById('price-results');
+  const list = document.getElementById('price-list');
+  container.style.display = 'block';
+  list.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner" style="width:20px;height:20px"></span></div>';
+
+  try {
+    const resp = await fetch(getURL('preco'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' },
+      body: JSON.stringify({
+        idLote: '1',
+        parametrosProduto: services.map((svc, i) => ({
+          coProduto: svc,
+          nuRequisicao: String(i+1),
+          cepOrigem: cepO,
+          cepDestino: cepD,
+          psObjeto: peso,
+          tpObjeto: tipo,
+          comprimento: comp,
+          largura: larg,
+          altura: alt,
+          dtEvento: new Date().toLocaleDateString('pt-BR').split('/').reverse().join('/'),
+        }))
+      }),
+    });
+
+    // Also get prazo
+    const prazoResp = await fetch(getURL('prazo'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json' },
+      body: JSON.stringify({
+        idLote: '1',
+        parametrosPrazo: services.map((svc, i) => ({
+          coProduto: svc,
+          nuRequisicao: String(i+1),
+          cepOrigem: cepO,
+          cepDestino: cepD,
+          dtEvento: new Date().toLocaleDateString('pt-BR'),
+        }))
+      }),
+    });
+
+    const priceData = resp.ok ? await resp.json() : [];
+    const prazoData = prazoResp.ok ? await prazoResp.json() : [];
+
+    const svcNames = { '03220':'SEDEX','03298':'SEDEX 10','03158':'SEDEX 12','03140':'SEDEX Hoje','03204':'PAC','04162':'SEDEX Contrato','04669':'PAC Contrato' };
+
+    list.innerHTML = (Array.isArray(priceData) ? priceData : []).map(p => {
+      const prazo = prazoData.find ? prazoData.find(pr => pr.coProduto === p.coProduto) : null;
+      return `
+        <div class="price-result-item" onclick="this.classList.toggle('selected')">
+          <div>
+            <div class="price-svc">${svcNames[p.coProduto] || 'Serviço ' + p.coProduto}</div>
+            <div class="price-prazo">${prazo ? prazo.prazoEntrega + (prazo.prazoEntrega === 1 ? ' dia útil' : ' dias úteis') : '—'} · ${p.entregaSabado === 'S' ? 'Entrega sábado' : 'Dias úteis'}</div>
+          </div>
+          <div class="price-val">R$ ${p.pcFinal || p.pcProduto || '—'}</div>
+        </div>
+      `;
+    }).join('') || '<div class="empty-state"><div class="empty-state-text">Nenhum resultado disponível para esta rota</div></div>';
+
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-text text-error">Erro: ' + e.message + '</div></div>';
+    toast('Erro ao calcular preço: ' + e.message, 'error');
+  }
+}
+
+// ===== CSV / BATCH =====
+function handleDragOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('drag'); }
+function handleDragLeave(e) { document.getElementById('upload-zone').classList.remove('drag'); }
+function handleDrop(e) { e.preventDefault(); handleDragLeave(); const f = e.dataTransfer.files[0]; if(f) processCSVFile(f); }
+function handleCSV(e) { const f = e.target.files[0]; if(f) processCSVFile(f); }
+
+function processCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const rows = text.split('\n').filter(r => r.trim());
+    const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+    const data = rows.slice(1).map(row => {
+      const vals = row.split(',');
+      return Object.fromEntries(headers.map((h, i) => [h, vals[i]?.trim() || '']));
+    }).filter(r => Object.values(r).some(v => v));
+
+    state.csvData = data;
+    renderCSVPreview(headers, data);
+    toast(data.length + ' registros carregados', 'success');
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function renderCSVPreview(headers, data) {
+  const preview = document.getElementById('csv-preview');
+  const wrap = document.getElementById('csv-table-wrap');
+  preview.style.display = 'block';
+
+  const displayHeaders = headers.slice(0, 7);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>${displayHeaders.map(h => '<th>' + h + '</th>').join('')}<th>status</th></tr></thead>
+      <tbody>${data.slice(0,10).map(row => `
+        <tr>${displayHeaders.map(h => '<td>' + (row[h] || '—') + '</td>').join('')}<td><span class="badge badge-neutral">aguardando</span></td></tr>
+      `).join('')}</tbody>
+    </table>
+    ${data.length > 10 ? '<div class="text-sm" style="margin-top:8px;padding:8px">... e mais ' + (data.length-10) + ' registros</div>' : ''}
+  `;
+}
+
+async function processBatch() {
+  if (!state.token) { toast('Gere um token primeiro', 'error'); return; }
+  if (state.csvData.length === 0) { toast('Nenhum dado carregado', 'error'); return; }
+
+  const btn = document.getElementById('process-btn');
+  btn.innerHTML = '<span class="spinner"></span> Processando...';
+  btn.disabled = true;
+
+  const results = { ok: 0, errors: 0, ids: [] };
+  const batchResult = document.getElementById('batch-result');
+  const batchContent = document.getElementById('batch-result-content');
+  batchResult.style.display = 'block';
+  batchContent.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner" style="width:24px;height:24px"></span><div style="margin-top:8px;color:var(--text3)">Processando ' + state.csvData.length + ' itens...</div></div>';
+
+  for (const row of state.csvData) {
+    try {
+      const payload = {
+        codigoServico: row.servico || '03220',
+        pesoInformado: row.peso || '300',
+        codigoFormatoObjetoInformado: '2',
+        alturaInformada: row.altura || '0',
+        larguraInformada: row.largura || '0',
+        comprimentoInformado: row.comprimento || '0',
+        diametroInformado: '',
+        pesoCubico: '0',
+        tipoDocumento: 'NF',
+        precoPostagem: 0,
+        remetente: {
+          nome: row.rem_nome || 'Remetente',
+          endereco: { cep: (row.rem_cep || '').replace(/\D/g,''), logradouro: row.rem_logradouro || '', numero: row.rem_numero || 'SN', bairro: row.rem_bairro || '', cidade: row.rem_cidade || '', uf: row.rem_uf || 'SP' }
+        },
+        destinatarios: [{
+          nome: row.dest_nome || 'Destinatário',
+          endereco: { cep: (row.dest_cep || '').replace(/\D/g,''), logradouro: row.dest_logradouro || '', numero: row.dest_numero || 'SN', bairro: row.dest_bairro || '', cidade: row.dest_cidade || '', uf: row.dest_uf || '' }
+        }],
+        servicosAdicionais: [],
+      };
+      if (state.credentials?.card) payload.numeroCartaoPostagem = state.credentials.card;
+
+      const resp = await fetch(getURL('prepostagem'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.msgs?.join(', ') || 'Erro');
+      results.ok++;
+      results.ids.push(data.id);
+      state.history.unshift({ id: data.id, destNome: row.dest_nome, destCep: row.dest_cep, servico: row.servico, peso: row.peso, date: new Date().toISOString(), status: 'gerado', batch: true });
+    } catch(e) {
+      results.errors++;
+    }
+    await new Promise(r => setTimeout(r, 200)); // Rate limit
+  }
+
+  state.stats.total += results.ok;
+  state.stats.lots++;
+  localStorage.setItem('cl_stats', JSON.stringify(state.stats));
+  localStorage.setItem('cl_history', JSON.stringify(state.history.slice(0,200)));
+
+  batchContent.innerHTML = `
+    <div class="form-grid form-grid-2">
+      <div class="stat-card accent"><div class="stat-label">Sucesso</div><div class="stat-value">${results.ok}</div></div>
+      <div class="stat-card"><div class="stat-label">Erros</div><div class="stat-value" style="color:var(--${results.errors > 0 ? 'error' : 'text'})">${results.errors}</div></div>
+    </div>
+    ${results.ids.length > 0 ? `
+      <div style="margin-top:12px">
+        <button class="btn btn-primary" onclick="downloadBatchLabels(${JSON.stringify(results.ids)})">
+          Baixar Todos os Rótulos (${results.ids.length})
+        </button>
+      </div>
+    ` : ''}
+  `;
+
+  updateStats();
+  updateHistoryTable();
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><polygon points="5,3 19,12 5,21 5,3"/></svg> Processar Lote';
+  btn.disabled = false;
+  toast('Lote processado: ' + results.ok + ' OK, ' + results.errors + ' erros', results.errors > 0 ? 'warning' : 'success');
+}
+
+async function downloadBatchLabels(ids) {
+  if (!state.token) return;
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 6) chunks.push(ids.slice(i, i+6));
+  for (const chunk of chunks) {
+    try {
+      await fetch(getURL('rotulo'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.token },
+        body: JSON.stringify({ idsPrePostagem: chunk, tipoRotulo: 'P', formatoRotulo: 'ET' }),
+      });
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 300));
+  }
+  toast('Rótulos solicitados! Verifique o painel dos Correios.', 'success');
+}
+
+function clearCSV() {
+  state.csvData = [];
+  document.getElementById('csv-preview').style.display = 'none';
+  document.getElementById('batch-result').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+}
+
+function downloadTemplate() {
+  const csv = 'rem_nome,rem_cep,rem_logradouro,rem_numero,rem_bairro,rem_cidade,rem_uf,dest_nome,dest_cep,dest_logradouro,dest_numero,dest_bairro,dest_cidade,dest_uf,servico,peso,altura,largura,comprimento\nLojas Exemplo,01310100,Av Paulista,1578,Bela Vista,São Paulo,SP,João Silva,20040020,Av Rio Branco,156,Centro,Rio de Janeiro,RJ,03220,500,15,20,30\n';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'template_correiolabel.csv';
+  a.click();
+}
+
+// ===== HISTORY =====
+function updateHistoryTable() {
+  const wrap = document.getElementById('history-table-wrap');
+  const badge = document.getElementById('history-badge');
+  if (badge) badge.textContent = state.history.length;
+
+  if (state.history.length === 0) {
+    wrap.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg><div class="empty-state-text">Nenhum registro ainda</div></div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Destinatário</th><th>CEP</th><th>Serviço</th><th>Peso</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody>
+          ${state.history.slice(0,50).map(h => `
+            <tr>
+              <td style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${h.id?.substring(0,16) || '—'}</td>
+              <td style="color:var(--text)">${h.destNome || '—'}</td>
+              <td style="font-family:var(--font-mono)">${h.destCep || '—'}</td>
+              <td>${h.servico || '—'}</td>
+              <td>${h.peso || '—'}g</td>
+              <td style="font-family:var(--font-mono);font-size:11px">${h.date ? formatDateBR(h.date) : '—'}</td>
+              <td><span class="badge badge-${h.status === 'gerado' ? 'success' : 'neutral'}">${h.status || '—'}</span></td>
+              <td>
+                <button class="btn btn-sm" onclick="downloadLabel('${h.id}')">PDF</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function exportHistory() {
+  if (state.history.length === 0) { toast('Nenhum dado para exportar', 'warning'); return; }
+  const headers = ['id','destNome','destCep','servico','peso','date','status'];
+  const csv = headers.join(',') + '\n' + state.history.map(h => headers.map(k => '"' + (h[k] || '') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'historico_correiolabel_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  toast('Histórico exportado', 'success');
+}
+
+function clearHistory() {
+  if (!confirm('Limpar todo o histórico?')) return;
+  state.history = [];
+  localStorage.removeItem('cl_history');
+  updateHistoryTable();
+  toast('Histórico limpo', 'info');
+}
+
+// ===== STATS =====
+function updateStats() {
+  document.getElementById('stat-today').textContent = state.stats.today;
+  document.getElementById('stat-total').textContent = state.stats.total;
+  document.getElementById('stat-lots').textContent = state.stats.lots;
+
+  // Recent list
+  const recent = document.getElementById('recent-list');
+  if (state.history.length === 0) {
+    recent.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg><div class="empty-state-text">Nenhuma etiqueta gerada ainda</div></div>';
+  } else {
+    recent.innerHTML = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Destinatário</th><th>Serviço</th><th>Data</th></tr></thead><tbody>' +
+      state.history.slice(0,5).map(h => `<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${h.id?.substring(0,14) || '—'}</td><td style="color:var(--text)">${h.destNome || '—'}</td><td>${h.servico || '—'}</td><td style="font-size:11px;font-family:var(--font-mono)">${h.date ? formatDateBR(h.date) : '—'}</td></tr>`).join('') +
+      '</tbody></table></div>';
+  }
+}
+
+// ===== HELPERS =====
+function formatDateBR(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch { return dateStr; }
+}
+
+function formatTimeDiff(expStr) {
+  if (!expStr) return '—';
+  try {
+    const exp = new Date(expStr);
+    const now = new Date();
+    const diff = Math.round((exp - now) / 1000 / 60);
+    if (diff < 0) return 'EXPIRADO';
+    if (diff < 60) return diff + 'min';
+    return Math.round(diff / 60) + 'h';
+  } catch { return '—'; }
+}
+
+// ===== PWA / SERVICE WORKER =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ===== INIT =====
+loadCredentials();
+updateStats();
+updateHistoryTable();
+
+// Auto-refresh token timer
+setInterval(() => {
+  if (state.tokenExpires) {
+    const el = document.getElementById('stat-token');
+    if (el) el.textContent = formatTimeDiff(state.tokenExpires);
+  }
+}, 60000);
+</script>
+</body>
+</html>
