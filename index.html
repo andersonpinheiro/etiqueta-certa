@@ -1920,7 +1920,9 @@ async function processBatch() {
         destinatario: {
           nome: row.dest_nome || 'Destinatário',
           endereco: { cep: (row.dest_cep || '').replace(/\D/g,''), logradouro: row.dest_logradouro || '', numero: row.dest_numero || 'SN', bairro: row.dest_bairro || '', cidade: row.dest_cidade || '', uf: row.dest_uf || '' }
-        }],
+        },
+        servicosAdicionais: [],
+      };
         servicosAdicionais: [],
       };
       if (state.credentials?.card) payload.numeroCartaoPostagem = state.credentials.card;
