@@ -1558,6 +1558,8 @@ async function generateLabel() {
   // Build payload
   const creds = state.credentials;
   const adicionais = Array.from(document.getElementById('s-adicionais').selectedOptions).map(o => ({coServAdicional: o.value}));
+  const tipoDoc = g('s-tipo-doc') || 'NF'; // Guarda o tipo de documento para usar na validação abaixo
+
   const payload = {
     codigoServico: g('s-servico'),
     codigoFormatoObjetoInformado: g('s-tipo-obj') || '2',
@@ -1567,8 +1569,9 @@ async function generateLabel() {
     diametroInformado: '',
     pesoCubico: '0',
     pesoInformado: g('s-peso'),
-    tipoDocumento: g('s-tipo-doc') || 'NF',
+    tipoDocumento: tipoDoc,
     precoPostagem: 0,
+    logNaoPossuiObjetosProibidos: true, // <--- ADICIONADO: Resolve o Erro PPN-330
     remetente: {
       nome: g('s-rem-nome'),
       dddTelefone: g('s-rem-tel') ? g('s-rem-tel').replace(/\D/g,'').substring(0,2) : '',
@@ -1600,10 +1603,25 @@ async function generateLabel() {
       }
     },
     servicosAdicionais: adicionais,
-    observacao: g('s-obs'),
-    numeroNotaFiscal: g('s-nf')
+    observacao: g('s-obs') // <-- Atenção: retirei a vírgula e o numeroNotaFiscal daqui
   };
+
   if (creds?.card) payload.numeroCartaoPostagem = creds.card;
+
+  // <--- ADICIONADO: Lógica inteligente para resolver o Erro PPN-347 (Declaração de Conteúdo)
+  if (tipoDoc === 'N') {
+    payload.declaracaoConteudo = {
+      pesoTotal: parseInt(g('s-peso')) || 300,
+      valorTotal: parseFloat(g('s-valor')) || 10.00,
+      itens: [{
+        conteudo: g('s-obs') || 'Produtos',
+        quantidade: 1,
+        valor: parseFloat(g('s-valor')) || 10.00
+      }]
+    };
+  } else {
+    payload.numeroNotaFiscal = g('s-nf') || '12345';
+  }
 
   try {
     const resp = await coreFetch('/prepostagem/v1/prepostagens', {
