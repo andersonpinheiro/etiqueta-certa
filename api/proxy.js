@@ -2,7 +2,7 @@
 // O frontend envia: { url: 'https://apihom.correios.com.br/...', method, body }
 // Este serverless repassa server-side, sem CORS
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');

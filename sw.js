@@ -21,11 +21,12 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // API calls: sempre network-first, sem cache
-  if (e.request.url.includes('correios.com.br')) {
-    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', { headers: { 'Content-Type': 'application/json' } })));
+  // Ignora chamadas para a API interna ou métodos POST (como o Proxy e Token)
+  if (e.request.method !== 'GET' || e.request.url.includes('/api/')) {
+    e.respondWith(fetch(e.request));
     return;
   }
+  
   // Assets: cache-first
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {

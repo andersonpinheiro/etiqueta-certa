@@ -1,7 +1,7 @@
 // api/token.js — Proxy para geração de token dos Correios
 // Resolve CORS: o browser chama /api/token, que chama a API dos Correios server-side
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
