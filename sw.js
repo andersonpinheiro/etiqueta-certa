@@ -21,10 +21,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Ignora chamadas para a API interna ou métodos POST (como o Proxy e Token)
-  if (e.request.method !== 'GET' || e.request.url.includes('/api/')) {
-    e.respondWith(fetch(e.request));
-    return;
+  // Ignora chamadas de extensões do Chrome e chamadas para a nossa API POST
+  if (!e.request.url.startsWith('http') || e.request.method !== 'GET' || e.request.url.includes('/api/')) {
+    return; 
   }
   
   // Assets: cache-first
