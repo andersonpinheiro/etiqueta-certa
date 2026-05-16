@@ -1571,8 +1571,8 @@ async function generateLabel() {
     precoPostagem: 0,
     remetente: {
       nome: g('s-rem-nome'),
-      dddTelefone: g('s-rem-tel').replace(/\D/g,'').substring(0,2),
-      telefone: g('s-rem-tel').replace(/\D/g,'').substring(2),
+      dddTelefone: g('s-rem-tel') ? g('s-rem-tel').replace(/\D/g,'').substring(0,2) : '',
+      telefone: g('s-rem-tel') ? g('s-rem-tel').replace(/\D/g,'').substring(2) : '',
       celular: '',
       email: g('s-rem-email'),
       cpfCnpj: g('s-rem-cpf').replace(/\D/g,''),
@@ -1601,6 +1601,7 @@ async function generateLabel() {
     },
     servicosAdicionais: adicionais,
     observacao: g('s-obs'),
+    numeroNotaFiscal: g('s-nf')
   };
   if (creds?.card) payload.numeroCartaoPostagem = creds.card;
 
@@ -1913,6 +1914,7 @@ async function processBatch() {
         pesoCubico: '0',
         tipoDocumento: 'NF',
         precoPostagem: 0,
+        logNaoPossuiObjetosProibidos: true,
         remetente: {
           nome: row.rem_nome || 'Remetente',
           endereco: { cep: (row.rem_cep || '').replace(/\D/g,''), logradouro: row.rem_logradouro || '', numero: row.rem_numero || 'SN', bairro: row.rem_bairro || '', cidade: row.rem_cidade || '', uf: row.rem_uf || 'SP' }
