@@ -1923,8 +1923,7 @@ async function processBatch() {
         },
         servicosAdicionais: [],
       };
-        servicosAdicionais: [],
-      };
+      
       if (state.credentials?.card) payload.numeroCartaoPostagem = state.credentials.card;
 
       const resp = await coreFetch('/prepostagem/v1/prepostagens', {
