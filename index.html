@@ -1586,10 +1586,9 @@ async function generateLabel() {
         uf: g('s-rem-uf'),
       }
     },
-    destinatarios: [{
+    destinatario: {  
       nome: g('s-dest-nome'),
       cpfCnpj: g('s-dest-cpf').replace(/\D/g,''),
-      email: g('s-dest-email') || '',
       endereco: {
         cep: g('s-dest-cep').replace(/\D/g,''),
         logradouro: g('s-dest-logradouro'),
@@ -1599,7 +1598,7 @@ async function generateLabel() {
         cidade: g('s-dest-cidade'),
         uf: g('s-dest-uf'),
       }
-    }],
+    },
     servicosAdicionais: adicionais,
     observacao: g('s-obs'),
   };
@@ -1918,7 +1917,7 @@ async function processBatch() {
           nome: row.rem_nome || 'Remetente',
           endereco: { cep: (row.rem_cep || '').replace(/\D/g,''), logradouro: row.rem_logradouro || '', numero: row.rem_numero || 'SN', bairro: row.rem_bairro || '', cidade: row.rem_cidade || '', uf: row.rem_uf || 'SP' }
         },
-        destinatarios: [{
+        destinatario: {
           nome: row.dest_nome || 'Destinatário',
           endereco: { cep: (row.dest_cep || '').replace(/\D/g,''), logradouro: row.dest_logradouro || '', numero: row.dest_numero || 'SN', bairro: row.dest_bairro || '', cidade: row.dest_cidade || '', uf: row.dest_uf || '' }
         }],
